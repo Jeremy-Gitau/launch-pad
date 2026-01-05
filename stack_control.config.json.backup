@@ -1,0 +1,21 @@
+{
+  "PROJECT_ROOT": "/home/jeremy/VisualStudio/scanner/scanner_backend",
+  "FRONTEND_DIR": "/home/jeremy/VisualStudio/scanner/scanner_frontend",
+  "NPM_EXE": "/usr/bin/npm",
+  "DOCKER_EXE": "/usr/bin/docker",
+  "DJANGO_ASGI_APP": "scanner_backend.asgi:application",
+  "DAPHNE_HOST": "127.0.0.1",
+  "DAPHNE_PORT": 8070,
+  "FRONTEND_HOST": "127.0.0.1",
+  "FRONTEND_PORT": 5178,
+  "AUTO_OPEN_BROWSER": true,
+  "REDIS_HOST": "127.0.0.1",
+  "REDIS_PORT": 6379,
+  "REDIS_DOCKER_NAME": "local-redis-7",
+  "FETCH_OPENAPI": false,
+  "OPENAPI_REL": "/api/schema/",
+  "CELERY_QUEUE": "ingestion,ocr,scans,downloads",
+  "CELERY_POOL": "threads",
+  "CELERY_CONCURRENCY": 5,
+  "MIGRATION_POLICY": "manual"
+}
