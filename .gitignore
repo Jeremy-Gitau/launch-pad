@@ -1,0 +1,5 @@
+venv
+*.db
+*.config
+*.spec
+__pycache__
