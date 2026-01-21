@@ -150,7 +150,7 @@ sudo apt-get install libnotify-bin
 
 2. **Set up Python virtual environment**:
 ```bash
-cd "stack controller"
+cd "launch pad"
 python3 -m venv venv
 source venv/bin/activate
 ```
@@ -173,7 +173,7 @@ pyinstaller --onefile --windowed --name LaunchPad launchpad.py --clean
 
 2. **Set up Python virtual environment**:
 ```powershell
-cd "stack controller"
+cd "launch pad"
 python -m venv venv
 venv\Scripts\activate
 ```
@@ -202,7 +202,7 @@ Version=1.0
 Type=Application
 Name=LaunchPad
 Comment=Django/React Stack Manager
-Exec=/home/YOUR_USERNAME/VisualStudio/stack controller/dist/LaunchPad
+Exec=/home/YOUR_USERNAME/VisualStudio/launch pad/dist/LaunchPad
 Icon=applications-system
 Terminal=false
 Categories=Development;Utility;
@@ -501,7 +501,7 @@ Click **"View DB Config"** to:
 ### Project Structure
 
 ```
-stack controller/
+launch pad/
 ├── launchpad.py               # Main application (1,857 lines)
 ├── launchpad.db               # Configuration database (auto-created)
 ├── dist/
