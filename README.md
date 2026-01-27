@@ -4,7 +4,7 @@ A comprehensive desktop application for managing Django/React development stacks
 
 ![Version](https://img.shields.io/badge/version-1.0.0-blue.svg)
 ![Python](https://img.shields.io/badge/python-3.12+-green.svg)
-![Platform](https://img.shields.io/badge/platform-linux%20%7C%20windows-lightgrey.svg)
+![Platform](https://img.shields.io/badge/platform-linux%20%7C%20macOS%20%7C%20windows-lightgrey.svg)
 
 ## 📋 Table of Contents
 
@@ -129,6 +129,22 @@ sudo apt-get install libnotify-bin
 # Follow: https://docs.docker.com/engine/install/
 ```
 
+#### macOS
+
+```bash
+# Install Homebrew (if not already installed)
+# Visit: https://brew.sh/
+
+# Python 3.12+ (includes tkinter)
+brew install python@3.12
+
+# Docker Desktop for Mac
+# Download from: https://www.docker.com/products/docker-desktop/
+
+# Node.js (for frontend)
+brew install node
+```
+
 #### Windows
 
 ```powershell
@@ -151,6 +167,29 @@ sudo apt-get install libnotify-bin
 2. **Set up Python virtual environment**:
 ```bash
 cd "launch pad"
+python3 -m venv venv
+source venv/bin/activate
+```
+
+3. **Install dependencies**:
+```bash
+pip install psutil pystray pillow pyinstaller
+```
+
+4. **Build the executable**:
+```bash
+pyinstaller --onefile --windowed --name LaunchPad launchpad.py --clean
+```
+
+5. **The executable will be in**: `dist/LaunchPad`
+
+#### macOS
+
+1. **Clone or download** the LaunchPad files
+
+2. **Set up Python virtual environment**:
+```bash
+cd "launch-pad"
 python3 -m venv venv
 source venv/bin/activate
 ```
@@ -208,6 +247,27 @@ Terminal=false
 Categories=Development;Utility;
 ```
 
+#### macOS
+
+Create an application bundle or add to Dock:
+
+**Option 1: Run from Terminal**
+```bash
+open /Users/YOUR_USERNAME/VisualStudioProjects/launch-pad/dist/LaunchPad
+```
+
+**Option 2: Create Alias**
+```bash
+# Drag dist/LaunchPad to Applications folder while holding Cmd+Option
+# Or create symbolic link:
+ln -s /Users/YOUR_USERNAME/VisualStudioProjects/launch-pad/dist/LaunchPad /Applications/LaunchPad
+```
+
+**Option 3: Add to Dock**
+1. Open Finder and navigate to `dist/LaunchPad`
+2. Drag the executable to your Dock
+3. Right-click and select "Options" → "Keep in Dock"
+
 #### Windows
 
 Create a shortcut:
@@ -257,6 +317,7 @@ Create a shortcut:
 
 All settings are stored in SQLite database at:
 - **Linux**: `~/.config/launchpad/launchpad.db`
+- **macOS**: `~/Library/Application Support/LaunchPad/launchpad.db`
 - **Windows**: `%APPDATA%\LaunchPad\launchpad.db`
 
 ### Configuration Dialog
@@ -465,7 +526,7 @@ Click **"View DB Config"** to:
 ## 💻 System Requirements
 
 ### Minimum Requirements
-- **OS**: Linux (Ubuntu 20.04+) or Windows 10/11
+- **OS**: Linux (Ubuntu 20.04+), macOS 11+ (Big Sur or later), or Windows 10/11
 - **Python**: 3.12 or higher
 - **RAM**: 4GB
 - **CPU**: Dual-core processor
@@ -482,7 +543,7 @@ Click **"View DB Config"** to:
 ### Dependencies
 
 **Python Packages:**
-- `tkinter` (system package: python3-tk)
+- `tkinter` (Linux: python3-tk, macOS: included with Homebrew Python, Windows: included)
 - `psutil` - Process and system monitoring
 - `pystray` - System tray icon
 - `Pillow` - Image processing
@@ -492,7 +553,8 @@ Click **"View DB Config"** to:
 - `docker` - Container management
 - `npm` - Node package manager
 - `git` - Version control (optional)
-- `notify-send` - Desktop notifications (optional)
+- `notify-send` - Desktop notifications (Linux only)
+- `terminal-notifier` - Desktop notifications (macOS, optional): `brew install terminal-notifier`
 
 ---
 
@@ -513,7 +575,10 @@ launch pad/
 
 ### Configuration Database
 
-**Location**: `~/.config/launchpad/launchpad.db`
+**Locations**:
+- Linux: `~/.config/launchpad/launchpad.db`
+- macOS: `~/Library/Application Support/LaunchPad/launchpad.db`
+- Windows: `%APPDATA%\LaunchPad\launchpad.db`
 
 **Schema**: Key-value store
 - Key: Configuration parameter name
@@ -570,7 +635,7 @@ Updates every 2 seconds in background thread.
 
 **Problem**: Service can't start because port is occupied
 
-**Solution (Linux)**:
+**Solution (Linux/macOS)**:
 ```bash
 # Find process on port 8070
 sudo lsof -i :8070
@@ -604,6 +669,18 @@ sudo systemctl start docker
 which docker  # Copy this path
 ```
 
+**Solution (macOS)**:
+```bash
+# Check Docker Desktop is running
+docker --version
+
+# Start Docker Desktop from Applications
+open -a Docker
+
+# Set path in Settings (usually):
+which docker  # Typically /usr/local/bin/docker
+```
+
 **Solution (Windows)**:
 ```powershell
 # Check Docker Desktop is running
@@ -618,9 +695,16 @@ docker --version
 
 **Problem**: Missing tkinter system package
 
-**Solution**:
+**Solution (Linux)**:
 ```bash
 sudo apt-get install python3-tk
+```
+
+**Solution (macOS)**:
+```bash
+# tkinter is included with Python from Homebrew
+# If missing, reinstall Python:
+brew reinstall python@3.12
 ```
 
 #### Services keep restarting
@@ -632,10 +716,10 @@ sudo apt-get install python3-tk
 2. Verify paths in Settings
 3. Test services manually:
 
-**Linux**:
+**Linux/macOS**:
 ```bash
 cd /path/to/django/project
-python manage.py runserver
+python3 manage.py runserver
 ```
 
 **Windows**:
@@ -686,7 +770,7 @@ python launchpad.py
 
 ### Running from Source
 
-**Linux**:
+**Linux/macOS**:
 ```bash
 # Activate virtual environment
 source venv/bin/activate
@@ -712,7 +796,7 @@ python -u launchpad.py
 
 ### Building Executable
 
-**Linux**:
+**Linux/macOS**:
 ```bash
 # Clean build
 pyinstaller --onefile --windowed --name LaunchPad launchpad.py --clean
@@ -823,8 +907,8 @@ Built with:
 **Quick Reference:**
 
 ```bash
-# View LaunchPad logs
-journalctl --user -f | grep LaunchPad
+# View LaunchPad logs (macOS/Linux)
+tail -f /tmp/launchpad.log  # If logging to file
 
 # Check service health
 docker ps  # Redis
@@ -832,7 +916,12 @@ curl http://localhost:8070/  # Daphne
 curl http://localhost:5178/  # Frontend
 
 # Reset configuration
+# Linux:
 rm ~/.config/launchpad/launchpad.db
+# macOS:
+rm ~/Library/Application\ Support/LaunchPad/launchpad.db
+# Windows:
+del %APPDATA%\LaunchPad\launchpad.db
 ```
 
 ---

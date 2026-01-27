@@ -3,3 +3,4 @@ venv
 *.config
 *.spec
 __pycache__
+build/
