@@ -713,6 +713,45 @@ class StackController:
         self._spawn("celery_worker", proc)
 
     # ---------- Frontend ----------
+    def _get_nvm_environment(self):
+        """Get environment with NVM loaded for Node.js access."""
+        env = os.environ.copy()
+        
+        # Try to detect NVM installation
+        nvm_dir = env.get('NVM_DIR') or os.path.expanduser('~/.nvm')
+        
+        if not os.path.exists(nvm_dir):
+            return env  # NVM not found, return default environment
+        
+        # Try to get the current NVM version or use default
+        try:
+            # Run a shell command that sources NVM and gets node path
+            cmd = f'bash -lc "source {nvm_dir}/nvm.sh && command -v node"'
+            result = subprocess.run(cmd, shell=True, capture_output=True, text=True, timeout=5)
+            if result.returncode == 0 and result.stdout.strip():
+                node_path = result.stdout.strip()
+                node_bin_dir = os.path.dirname(node_path)
+                
+                # Update PATH to include the NVM node version
+                if 'PATH' in env:
+                    env['PATH'] = f"{node_bin_dir}:{env['PATH']}"
+                else:
+                    env['PATH'] = node_bin_dir
+                
+                # Get npm path too
+                npm_cmd = f'bash -lc "source {nvm_dir}/nvm.sh && command -v npm"'
+                npm_result = subprocess.run(npm_cmd, shell=True, capture_output=True, text=True, timeout=5)
+                if npm_result.returncode == 0 and npm_result.stdout.strip():
+                    npm_path = npm_result.stdout.strip()
+                    self.log(f"Using NVM Node.js: {node_path}")
+                    self.log(f"Using NVM npm: {npm_path}")
+                    return env, npm_path
+                
+        except Exception as e:
+            self.log(f"Warning: Failed to load NVM environment: {e}")
+        
+        return env, None
+    
     def start_frontend(self):
         # Check if frontend is already running (managed by us)
         with self.lock:
@@ -740,13 +779,17 @@ class StackController:
                 self.log("Could not identify process on port. Aborting frontend start.")
                 return
         
+        # Get NVM environment and npm path if available
+        nvm_env, nvm_npm_path = self._get_nvm_environment()
+        npm_exe = nvm_npm_path if nvm_npm_path else self.cfg.NPM_EXE
+        
         args = [
-            self.cfg.NPM_EXE, "run", "dev", "--",
+            npm_exe, "run", "dev", "--",
             "--port", str(self.cfg.FRONTEND_PORT),
             "--strictPort",
             "--host", self.cfg.FRONTEND_HOST,
         ]
-        proc = Proc("frontend", args, cwd=self.cfg.FRONTEND_DIR, auto_restart=True)
+        proc = Proc("frontend", args, cwd=self.cfg.FRONTEND_DIR, env=nvm_env, auto_restart=True)
         self._spawn("frontend", proc)
 
         if self.cfg.AUTO_OPEN_BROWSER:
