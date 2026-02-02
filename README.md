@@ -104,11 +104,13 @@ Intelligent resource analysis and recommendations:
 - **View DB Config**: Inspect and export configuration
 
 #### 🪟 User Interface
-- System tray icon with quick actions
-- Minimize to tray support
+- System tray icon with quick actions (Linux/Windows only)
+- Minimize to tray support (Linux/Windows)
 - Modern ttk-themed interface
 - Responsive design (1200x800)
 - Persistent window state
+
+> **Note for macOS users**: System tray functionality is disabled on macOS due to compatibility issues between `pystray` and tkinter. Use the standard Dock icon instead.
 
 ---
 
@@ -706,6 +708,15 @@ sudo apt-get install python3-tk
 # If missing, reinstall Python:
 brew reinstall python@3.12
 ```
+
+#### "NSUpdateCycleInitialize() called off main thread" (macOS)
+
+**Problem**: App crashes on macOS with error about NSUpdateCycleInitialize
+
+**Solution**:
+This is a known issue with `pystray` (system tray) and tkinter on macOS. The system tray icon feature is automatically disabled on macOS to prevent this crash. The app will work normally, just without the system tray icon.
+
+**Note**: On macOS, use the Dock icon instead of a system tray icon. You can still minimize the window normally using Cmd+M or the yellow minimize button.
 
 #### Services keep restarting
 

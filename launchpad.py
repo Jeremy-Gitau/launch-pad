@@ -31,6 +31,7 @@ except ImportError:
 # OS detection
 # =========================
 IS_WINDOWS = os.name == "nt"
+IS_MACOS = sys.platform == "darwin"
 
 # =========================
 # DEFAULTS (used if no config file present)
@@ -1911,6 +1912,12 @@ class App(tk.Tk):
     def setup_tray_icon(self):
         """Setup system tray icon."""
         if not HAS_TRAY:
+            return None
+        
+        # On macOS, pystray conflicts with tkinter's mainloop due to AppKit threading requirements
+        # Disable system tray on macOS to prevent crashes
+        if IS_MACOS:
+            print("System tray icon disabled on macOS (not compatible with tkinter)")
             return None
         
         # Create a simple icon
