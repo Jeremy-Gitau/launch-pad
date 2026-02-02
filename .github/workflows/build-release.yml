@@ -1,0 +1,135 @@
+name: Build Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+  workflow_dispatch:
+
+jobs:
+  build-macos:
+    runs-on: macos-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install psutil pystray pillow pyinstaller
+
+      - name: Build executable
+        run: |
+          pyinstaller --onefile --windowed --name LaunchPad launchpad.py --clean
+
+      - name: Create DMG (optional)
+        run: |
+          mkdir -p dist/dmg
+          cp -r dist/LaunchPad.app dist/dmg/
+          hdiutil create -volname "LaunchPad" -srcfolder dist/dmg -ov -format UDZO dist/LaunchPad-macos.dmg
+
+      - name: Upload artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: launchpad-macos
+          path: |
+            dist/LaunchPad.app
+            dist/LaunchPad-macos.dmg
+
+  build-linux:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Install system dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y python3-tk python3-dev
+
+      - name: Install Python dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install psutil pystray pillow pyinstaller
+
+      - name: Build executable
+        run: |
+          pyinstaller --onefile --windowed --name LaunchPad launchpad.py --clean
+
+      - name: Create tarball
+        run: |
+          cd dist
+          tar -czf LaunchPad-linux-x86_64.tar.gz LaunchPad
+          cd ..
+
+      - name: Upload artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: launchpad-linux
+          path: dist/LaunchPad-linux-x86_64.tar.gz
+
+  build-windows:
+    runs-on: windows-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install psutil pystray pillow pyinstaller
+
+      - name: Build executable
+        run: |
+          pyinstaller --onefile --windowed --name LaunchPad launchpad.py --clean
+
+      - name: Create ZIP
+        run: |
+          cd dist
+          Compress-Archive -Path LaunchPad.exe -DestinationPath LaunchPad-windows-x64.zip
+          cd ..
+
+      - name: Upload artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: launchpad-windows
+          path: dist/LaunchPad-windows-x64.zip
+
+  create-release:
+    needs: [build-macos, build-linux, build-windows]
+    runs-on: ubuntu-latest
+    if: startsWith(github.ref, 'refs/tags/')
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Download all artifacts
+        uses: actions/download-artifact@v4
+
+      - name: Create Release
+        uses: softprops/action-gh-release@v1
+        with:
+          files: |
+            launchpad-macos/LaunchPad-macos.dmg
+            launchpad-linux/LaunchPad-linux-x86_64.tar.gz
+            launchpad-windows/LaunchPad-windows-x64.zip
+          draft: false
+          prerelease: false
+          generate_release_notes: true
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
