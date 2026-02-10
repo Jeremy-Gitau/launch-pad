@@ -5,6 +5,7 @@ import time
 import socket
 import threading
 import subprocess
+import shutil
 from urllib.parse import urlparse
 import webbrowser
 import sqlite3
@@ -15,14 +16,14 @@ from dataclasses import dataclass
 from datetime import datetime
 from enum import Enum
 try:
-    import psutil
+    import psutil  # type: ignore
     HAS_PSUTIL = True
 except ImportError:
     HAS_PSUTIL = False
 
 try:
-    from pystray import Icon, Menu, MenuItem
-    from PIL import Image, ImageDraw
+    from pystray import Icon, Menu, MenuItem  # type: ignore
+    from PIL import Image, ImageDraw  # type: ignore
     HAS_TRAY = True
 except ImportError:
     HAS_TRAY = False
@@ -34,14 +35,62 @@ IS_WINDOWS = os.name == "nt"
 IS_MACOS = sys.platform == "darwin"
 
 # =========================
+# Auto-detect common tools on macOS/Linux
+# =========================
+def auto_detect_tool(tool_name, common_paths=None):
+    """Auto-detect tool location using shutil.which and common paths."""
+    # First try using which
+    result = shutil.which(tool_name)
+    if result and os.path.exists(result):
+        return result
+    
+    # Try common paths if provided
+    if common_paths:
+        for path in common_paths:
+            if os.path.exists(path):
+                return path
+    
+    # Return the tool name and hope it's in PATH
+    return tool_name
+
+def get_default_npm():
+    """Get default npm path for the current OS."""
+    if IS_WINDOWS:
+        return r"C:\Program Files\nodejs\npm.cmd"
+    else:
+        # Try to detect npm on macOS/Linux
+        common_paths = [
+            "/usr/local/bin/npm",
+            "/opt/homebrew/bin/npm",  # Apple Silicon Homebrew
+            "/usr/bin/npm",
+        ]
+        return auto_detect_tool("npm", common_paths)
+
+def get_default_docker():
+    """Get default Docker path for the current OS."""
+    if IS_WINDOWS:
+        return r"C:\Program Files\Docker\Docker\resources\bin\docker.exe"
+    elif IS_MACOS:
+        # macOS Docker Desktop locations
+        common_paths = [
+            "/usr/local/bin/docker",
+            "/opt/homebrew/bin/docker",  # Apple Silicon Homebrew
+            "/Applications/Docker.app/Contents/Resources/bin/docker",
+        ]
+        return auto_detect_tool("docker", common_paths)
+    else:
+        # Linux
+        return auto_detect_tool("docker", ["/usr/bin/docker"])
+
+# =========================
 # DEFAULTS (used if no config file present)
 # =========================
 DEFAULTS = {
     # Paths (just placeholders; you’ll set real ones in Configure…)
-    "PROJECT_ROOT": r"C:\path\to\scanner_backend" if IS_WINDOWS else "/home/user/projects/scanner_backend",
-    "FRONTEND_DIR": r"C:\path\to\scanner_frontend" if IS_WINDOWS else "/home/user/projects/scanner_frontend",
-    "NPM_EXE": r"C:\Program Files\nodejs\npm.cmd" if IS_WINDOWS else "/usr/bin/npm",
-    "DOCKER_EXE": r"C:\Program Files\Docker\Docker\resources\bin\docker.exe" if IS_WINDOWS else "/usr/bin/docker",
+    "PROJECT_ROOT": r"C:\path\to\scanner_backend" if IS_WINDOWS else os.path.expanduser("~/projects/scanner_backend"),
+    "FRONTEND_DIR": r"C:\path\to\scanner_frontend" if IS_WINDOWS else os.path.expanduser("~/projects/scanner_frontend"),
+    "NPM_EXE": get_default_npm(),
+    "DOCKER_EXE": get_default_docker(),
 
     # Backend/ASGI
     "DJANGO_ASGI_APP": "scanner_backend.asgi:application",
@@ -382,12 +431,48 @@ class StackController:
         self._monitoring_thread = threading.Thread(target=monitor, daemon=True)
         self._monitoring_thread.start()
     
+    def _kill_port_silently(self, port: int):
+        """Silently kill any process using the specified port without prompting."""
+        pids = self._find_pids_on_port(port)
+        if not pids:
+            return False
+        
+        killed_any = False
+        for pid, name, cmd in pids:
+            try:
+                if HAS_PSUTIL:
+                    psutil.Process(pid).terminate()
+                    try:
+                        psutil.Process(pid).wait(timeout=3)
+                    except Exception:
+                        psutil.Process(pid).kill()
+                else:
+                    os.kill(pid, 15)  # SIGTERM
+                    time.sleep(1)
+                    # if still alive, force kill
+                    try:
+                        os.kill(pid, 0)  # Check if process exists
+                        os.kill(pid, 9)  # SIGKILL
+                    except Exception:
+                        pass
+                killed_any = True
+                self.log(f"Cleaned up PID {pid} ({name}) from port {port}")
+            except Exception as e:
+                self.log(f"Failed to terminate PID {pid}: {e}")
+        return killed_any
+    
     def _restart_proc(self, key):
         """Restart a failed process."""
         with self.lock:
             proc = self.procs.get(key)
             if not proc:
                 return
+        
+        # For daphne, clean up the port first
+        if key == "daphne":
+            self.log(f"Cleaning up port {self.cfg.DAPHNE_PORT} before restarting...")
+            self._kill_port_silently(self.cfg.DAPHNE_PORT)
+            time.sleep(1)  # Give the OS time to release the port
         
         # Re-spawn based on key
         if key == "daphne":
@@ -622,8 +707,24 @@ class StackController:
         if self._tcp_open(self.cfg.REDIS_HOST, self.cfg.REDIS_PORT):
             self.log(f"Redis already available at {self.cfg.REDIS_HOST}:{self.cfg.REDIS_PORT}.")
             return
-        if not self.cfg.DOCKER_EXE or not os.path.exists(self.cfg.DOCKER_EXE):
-            self.log("Redis not detected and DOCKER_EXE not configured/exists. Start Redis manually.")
+        
+        # On macOS, try Homebrew Redis first before Docker
+        if IS_MACOS:
+            homebrew_redis = self._try_homebrew_redis()
+            if homebrew_redis:
+                return
+        
+        # Fall back to Docker
+        if not self.cfg.DOCKER_EXE:
+            self.log("Redis not detected and DOCKER_EXE not configured. Start Redis manually.")
+            return
+        
+        # Check if docker command exists (either as path or in PATH)
+        docker_exists = (os.path.exists(self.cfg.DOCKER_EXE) if os.path.isabs(self.cfg.DOCKER_EXE) 
+                        else shutil.which(self.cfg.DOCKER_EXE) is not None)
+        
+        if not docker_exists:
+            self.log(f"Redis not detected and Docker not found at '{self.cfg.DOCKER_EXE}'. Start Redis manually.")
             return
 
         self.log("Redis not detected; attempting to launch Docker Redis…")
@@ -643,6 +744,41 @@ class StackController:
                 return
             time.sleep(0.25)
         self.log("WARNING: Redis still not reachable. Check logs or start your service manually.")
+    
+    def _try_homebrew_redis(self):
+        """Try to start Redis using Homebrew services on macOS."""
+        try:
+            # Check if redis-server is available via Homebrew
+            redis_paths = [
+                "/usr/local/bin/redis-server",
+                "/opt/homebrew/bin/redis-server",
+            ]
+            redis_cmd = None
+            for path in redis_paths:
+                if os.path.exists(path):
+                    redis_cmd = path
+                    break
+            
+            if not redis_cmd:
+                redis_cmd = shutil.which("redis-server")
+            
+            if redis_cmd:
+                self.log(f"Found Homebrew Redis at {redis_cmd}, attempting to start...")
+                # Try to start with brew services
+                result = subprocess.run(["brew", "services", "start", "redis"], 
+                                      capture_output=True, text=True, timeout=10)
+                if result.returncode == 0:
+                    # Wait for Redis to be available
+                    for _ in range(20):
+                        if self._tcp_open(self.cfg.REDIS_HOST, self.cfg.REDIS_PORT):
+                            self.log("✅ Homebrew Redis started successfully")
+                            return True
+                        time.sleep(0.5)
+                    self.log("Homebrew Redis started but not yet reachable, continuing...")
+                    return False
+        except Exception as e:
+            self.log(f"Could not start Homebrew Redis: {e}")
+        return False
 
     # ---------- Backend ----------
     def start_daphne(self):
@@ -1348,9 +1484,18 @@ class App(tk.Tk):
         indicator.itemconfig(indicator.circle_id, fill=color)
     
     def show_notification(self, message, msg_type="info"):
-        """Show desktop notification (simplified version)."""
-        # For Linux with notify-send
-        if not IS_WINDOWS:
+        """Show desktop notification (platform-specific)."""
+        if IS_MACOS:
+            # macOS using osascript
+            try:
+                icon_emoji = {"success": "✅", "error": "❌", "warning": "⚠️"}.get(msg_type, "ℹ️")
+                script = f'display notification "{message}" with title "{icon_emoji} LaunchPad"'
+                subprocess.Popen(["osascript", "-e", script], 
+                               stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+            except:
+                pass
+        elif not IS_WINDOWS:
+            # Linux with notify-send
             try:
                 icon = {"success": "dialog-information", "error": "dialog-error", "warning": "dialog-warning"}.get(msg_type, "dialog-information")
                 subprocess.Popen(["notify-send", "-i", icon, "LaunchPad", message], 
@@ -1374,8 +1519,24 @@ class App(tk.Tk):
             cmd = f"cd '{self.cfg.PROJECT_ROOT}' && '{self.cfg.PYTHON_EXE}' manage.py shell"
             if IS_WINDOWS:
                 subprocess.Popen(['cmd', '/c', 'start', 'cmd', '/k', cmd])
+            elif IS_MACOS:
+                # macOS Terminal.app or iTerm
+                for term_cmd in [
+                    # iTerm2
+                    ['open', '-a', 'iTerm', '.'],
+                    # Terminal.app
+                    ['osascript', '-e', f'tell application "Terminal" to do script "cd {self.cfg.PROJECT_ROOT} && {self.cfg.PYTHON_EXE} manage.py shell"'],
+                ]:
+                    try:
+                        subprocess.Popen(term_cmd, 
+                                       stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+                        self.append_log("Django shell opened in new terminal")
+                        return
+                    except (FileNotFoundError, Exception):
+                        continue
+                self.append_log("Could not find terminal application")
             else:
-                # Try different terminal emulators
+                # Linux - Try different terminal emulators
                 for term in ['gnome-terminal', 'xterm', 'konsole', 'xfce4-terminal']:
                     try:
                         subprocess.Popen([term, '--', 'bash', '-c', cmd])

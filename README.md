@@ -35,6 +35,19 @@ LaunchPad is a powerful GUI application designed to simplify the management of c
 - **System Analysis**: Get hardware-based recommendations for optimal configuration
 - **Persistent Configuration**: SQLite database ensures settings survive restarts
 
+### 🍎 Enhanced macOS Support (New!)
+
+LaunchPad now includes first-class macOS support with native integrations:
+
+- **🔍 Auto-Detection**: Automatically finds Docker, npm, and Redis on macOS (Intel & Apple Silicon)
+- **🍺 Homebrew Integration**: Native support for Homebrew-installed tools and services
+- **🚀 Apple Silicon Ready**: Full support for M1/M2/M3 Macs with proper `/opt/homebrew` paths
+- **📱 Native Notifications**: Uses macOS notification system instead of third-party tools
+- **💻 Terminal Integration**: Opens Django shell in Terminal.app or iTerm2
+- **⚡ Efficient Redis**: Prefers Homebrew Redis over Docker for better performance
+
+See [MAC_COMPATIBILITY_CHANGES.md](MAC_COMPATIBILITY_CHANGES.md) for detailed information about macOS-specific features.
+
 ---
 
 ## ✨ Features
@@ -53,8 +66,9 @@ LaunchPad is a powerful GUI application designed to simplify the management of c
   - Adjustable concurrency levels
   - Custom queue support
 
-- **Redis (Docker)**
-  - Runs Redis in Docker container
+- **Redis (Docker/Homebrew)**
+  - Runs Redis in Docker container (all platforms)
+  - Native Homebrew Redis support (macOS)
   - Configurable memory and CPU limits
   - Automatic container lifecycle management
 
